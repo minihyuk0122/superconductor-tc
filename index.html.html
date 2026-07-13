@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초전도체 임계온도 예측기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#070b1a;         /* deep cold background */
+    --panel:#0e1530;        /* panel */
+    --panel-2:#131c3d;      /* raised panel */
+    --line:#233158;         /* hairlines */
+    --ice:#5fd0ff;          /* cyan ice accent */
+    --ice-deep:#2b7fd4;
+    --warm:#ffb347;         /* high-Tc amber */
+    --warm-glow:#ffd27a;
+    --text:#e7ecff;
+    --muted:#8b97c4;
+    --dim:#5b6690;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    font-family:"Inter",system-ui,sans-serif;
+    background:
+      radial-gradient(1200px 700px at 78% -10%, rgba(95,208,255,.10), transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, rgba(43,127,212,.12), transparent 55%),
+      var(--void);
+    color:var(--text);
+    min-height:100vh;
+    line-height:1.5;
+    padding:clamp(20px,4vw,56px);
+  }
+  .wrap{max-width:980px;margin:0 auto;}
+
+  /* header */
+  header{margin-bottom:clamp(28px,5vw,48px);}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--ice);opacity:.85;margin-bottom:14px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--ice);opacity:.6;}
+  h1{
+    font-family:"Space Grotesk",sans-serif;
+    font-weight:700;
+    font-size:clamp(30px,6vw,52px);
+    line-height:1.02;letter-spacing:-.02em;
+    margin-bottom:14px;
+  }
+  h1 .k{color:var(--ice);}
+  .lede{color:var(--muted);max-width:56ch;font-size:clamp(14px,2vw,16px);}
+
+  /* main grid */
+  .console{
+    display:grid;
+    grid-template-columns:1.25fr .95fr;
+    gap:clamp(16px,2.5vw,26px);
+    align-items:stretch;
+  }
+  @media (max-width:760px){ .console{grid-template-columns:1fr;} }
+
+  .card{
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:clamp(20px,3vw,30px);
+  }
+  .card h2{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--dim);margin-bottom:22px;
+  }
+
+  /* sliders */
+  .field{margin-bottom:26px;}
+  .field:last-child{margin-bottom:0;}
+  .field-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:4px;}
+  .field-name{font-size:15px;font-weight:500;}
+  .field-code{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--dim);letter-spacing:.02em;}
+  .field-val{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:20px;font-weight:600;color:var(--ice);
+    font-variant-numeric:tabular-nums;
+  }
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:4px;border-radius:4px;margin-top:14px;
+    background:var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:20px;height:20px;border-radius:50%;
+    background:var(--ice);
+    border:3px solid var(--void);
+    box-shadow:0 0 0 1px var(--ice-deep),0 0 14px rgba(95,208,255,.55);
+    cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px;height:18px;border-radius:50%;
+    background:var(--ice);border:3px solid var(--void);
+    box-shadow:0 0 0 1px var(--ice-deep),0 0 14px rgba(95,208,255,.55);cursor:pointer;
+  }
+  .field-scale{
+    display:flex;justify-content:space-between;
+    font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--dim);
+    margin-top:8px;
+  }
+
+  /* gauge / result */
+  .result{display:flex;flex-direction:column;}
+  .gauge-wrap{display:flex;gap:20px;flex:1;align-items:stretch;}
+  .thermo{
+    position:relative;width:26px;border-radius:14px;
+    background:var(--void);
+    border:1px solid var(--line);
+    overflow:hidden;flex-shrink:0;
+  }
+  .fill{
+    position:absolute;left:0;right:0;bottom:0;
+    background:linear-gradient(180deg,var(--warm-glow),var(--warm) 40%,var(--ice) 75%,var(--ice-deep));
+    transition:height .35s cubic-bezier(.4,0,.2,1);
+    border-radius:0 0 13px 13px;
+  }
+  .n2line{
+    position:absolute;left:-6px;right:-6px;height:0;
+    border-top:1.5px dashed var(--warm);
+    /* bottom set by JS */
+  }
+  .n2tag{
+    position:absolute;left:38px;transform:translateY(-50%);
+    font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--warm);
+    white-space:nowrap;letter-spacing:.03em;
+  }
+  .n2tag span{color:var(--dim);}
+  .ticks{display:flex;flex-direction:column;justify-content:space-between;
+    font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--dim);padding:2px 0;}
+
+  .readout{margin-top:24px;text-align:left;}
+  .readout .label{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--dim);margin-bottom:6px;
+  }
+  .tc{
+    font-family:"Space Grotesk",sans-serif;font-weight:700;
+    font-size:clamp(44px,9vw,64px);line-height:1;
+    font-variant-numeric:tabular-nums;
+    transition:color .35s ease;
+  }
+  .tc .unit{font-size:.4em;color:var(--muted);font-weight:500;margin-left:6px;}
+  .state{
+    display:inline-flex;align-items:center;gap:8px;margin-top:16px;
+    font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;
+    padding:7px 14px;border-radius:999px;
+    border:1px solid var(--line);
+    transition:all .35s ease;
+  }
+  .state .dot{width:7px;height:7px;border-radius:50%;}
+
+  /* footer / formula */
+  .foot{
+    margin-top:clamp(20px,3vw,28px);
+    display:grid;grid-template-columns:1fr;gap:14px;
+  }
+  .formula{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 20px;
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--muted);
+    overflow-x:auto;line-height:1.9;
+  }
+  .formula b{color:var(--ice);font-weight:600;}
+  .note{
+    font-size:12.5px;color:var(--dim);line-height:1.6;
+    border-left:2px solid var(--line);padding-left:14px;
+  }
+  .note strong{color:var(--muted);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Superconductor · Tc Estimator</div>
+    <h1>초전도체 <span class="k">임계온도</span> 예측기</h1>
+    <p class="lede">물질의 핵심 물성 세 가지를 조절하면, 실제 데이터에서 도출한 회귀식으로 예상 임계온도(Tc)를 추정합니다. 액체질소 온도(77K)를 넘으면 고온초전도체입니다.</p>
+  </header>
+
+  <div class="console">
+    <!-- inputs -->
+    <div class="card">
+      <h2>입력 · 물성 값</h2>
+
+      <div class="field">
+        <div class="field-top">
+          <div>
+            <div class="field-name">열전도도 가중 표준편차</div>
+            <div class="field-code">wtd_std_ThermalConductivity</div>
+          </div>
+          <div class="field-val" id="v1">500</div>
+        </div>
+        <input type="range" id="s1" min="0" max="1200" step="1" value="500">
+        <div class="field-scale"><span>0</span><span>1200</span></div>
+      </div>
+
+      <div class="field">
+        <div class="field-top">
+          <div>
+            <div class="field-name">원자반경 범위</div>
+            <div class="field-code">range_atomic_radius</div>
+          </div>
+          <div class="field-val" id="v2">150</div>
+        </div>
+        <input type="range" id="s2" min="0" max="300" step="1" value="150">
+        <div class="field-scale"><span>0</span><span>300</span></div>
+      </div>
+
+      <div class="field">
+        <div class="field-top">
+          <div>
+            <div class="field-name">원자가 가중 평균</div>
+            <div class="field-code">wtd_mean_Valence</div>
+          </div>
+          <div class="field-val" id="v3">3.0</div>
+        </div>
+        <input type="range" id="s3" min="1" max="7" step="0.1" value="3">
+        <div class="field-scale"><span>1</span><span>7</span></div>
+      </div>
+    </div>
+
+    <!-- result -->
+    <div class="card result">
+      <h2>출력 · 예상 Tc</h2>
+      <div class="gauge-wrap">
+        <div class="thermo">
+          <div class="fill" id="fill" style="height:55%"></div>
+          <div class="n2line" id="n2line"></div>
+        </div>
+        <div class="n2tag" id="n2tag">77 K<br><span>액체질소</span></div>
+        <div class="ticks">
+          <span>140</span><span>105</span><span>70</span><span>35</span><span>0</span>
+        </div>
+      </div>
+      <div class="readout">
+        <div class="label">Predicted Tc</div>
+        <div class="tc" id="tc">—<span class="unit">K</span></div>
+        <div class="state" id="state"><span class="dot"></span><span id="stateTxt">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="formula">
+      Tc = <b>-20.8066</b>
+      + (<b>-0.0079881</b> × wtd_std_ThermalConductivity)
+      + (<b>0.195203</b> × range_atomic_radius)
+      + (<b>24.4271</b> × wtd_mean_Valence)
+    </div>
+    <div class="note">
+      <strong>이 도구에 대해.</strong> 81개 물성 특징 중 임계온도에 가장 크게 기여한 상위 3개만으로 만든 <strong>단순 다중선형회귀 시연용 계산기</strong>입니다. 계수는 실제 초전도체 데이터(UCI, 21,263개)로 도출했습니다. 정밀 예측은 랜덤 포레스트 모델(R² 0.92, RMSE 9.70K)이 담당하며, 이 도구는 핵심 변수가 Tc를 어떻게 움직이는지 직관적으로 보여주기 위한 것입니다. 단순화로 인해 값이 음수로 나오거나 실제와 차이가 날 수 있습니다.
+    </div>
+  </div>
+</div>
+
+<script>
+  var GMAX = 140; // gauge top (K)
+  var els = {
+    s1:document.getElementById('s1'), s2:document.getElementById('s2'), s3:document.getElementById('s3'),
+    v1:document.getElementById('v1'), v2:document.getElementById('v2'), v3:document.getElementById('v3'),
+    tc:document.getElementById('tc'), fill:document.getElementById('fill'),
+    state:document.getElementById('state'), stateTxt:document.getElementById('stateTxt'),
+    n2line:document.getElementById('n2line'), n2tag:document.getElementById('n2tag')
+  };
+
+  function calc(a,b,c){
+    return -20.8066 + (-0.0079881*a) + (0.195203*b) + (24.4271*c);
+  }
+
+  function update(){
+    var a = parseFloat(els.s1.value);
+    var b = parseFloat(els.s2.value);
+    var c = parseFloat(els.s3.value);
+
+    els.v1.textContent = a.toFixed(0);
+    els.v2.textContent = b.toFixed(0);
+    els.v3.textContent = c.toFixed(1);
+
+    var tc = calc(a,b,c);
+    els.tc.innerHTML = tc.toFixed(1) + '<span class="unit">K</span>';
+
+    // gauge fill (clamp 0..GMAX for display)
+    var pct = Math.max(0, Math.min(100, (tc/GMAX)*100));
+    els.fill.style.height = pct + '%';
+
+    // high vs low Tc state (77K threshold)
+    var hot = tc >= 77;
+    els.tc.style.color = hot ? 'var(--warm-glow)' : 'var(--text)';
+    if(hot){
+      els.state.style.borderColor = 'rgba(255,179,71,.5)';
+      els.state.style.color = 'var(--warm-glow)';
+      els.state.style.background = 'rgba(255,179,71,.08)';
+      els.state.querySelector('.dot').style.background = 'var(--warm)';
+      els.state.querySelector('.dot').style.boxShadow = '0 0 10px var(--warm)';
+      els.stateTxt.textContent = '고온초전도체 (Tc ≥ 77K)';
+    } else {
+      els.state.style.borderColor = 'rgba(95,208,255,.4)';
+      els.state.style.color = 'var(--ice)';
+      els.state.style.background = 'rgba(95,208,255,.06)';
+      els.state.querySelector('.dot').style.background = 'var(--ice)';
+      els.state.querySelector('.dot').style.boxShadow = '0 0 10px var(--ice)';
+      els.stateTxt.textContent = '저온초전도체 (Tc < 77K)';
+    }
+  }
+
+  // place the 77K reference line on the thermometer
+  function placeN2(){
+    var pct = (77/GMAX)*100;
+    els.n2line.style.bottom = pct + '%';
+    els.n2tag.style.bottom = pct + '%';
+    els.n2tag.style.top = 'auto';
+  }
+
+  [els.s1,els.s2,els.s3].forEach(function(s){ s.addEventListener('input', update); });
+  placeN2();
+  update();
+</script>
+</body>
+</html>
